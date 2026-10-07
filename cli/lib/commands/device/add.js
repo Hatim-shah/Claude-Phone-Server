@@ -74,11 +74,11 @@ export async function deviceAddCommand() {
     {
       type: 'input',
       name: 'voiceId',
-      message: 'ElevenLabs voice ID:',
-      default: config.api.elevenlabs.defaultVoiceId || '',
+      message: 'Deepgram voice model (e.g. aura-2-orpheus-en):',
+      default: config.api.deepgram.defaultVoiceId || 'aura-2-orpheus-en',
       validate: (input) => {
         if (!input || input.trim() === '') {
-          return 'Voice ID cannot be empty';
+          return 'Voice model cannot be empty';
         }
         return true;
       }
@@ -91,9 +91,9 @@ export async function deviceAddCommand() {
     }
   ]);
 
-  // Validate voice ID with ElevenLabs API
-  const spinner = ora('Validating voice ID with ElevenLabs...').start();
-  const voiceResult = await validateVoiceId(config.api.elevenlabs.apiKey, answers.voiceId);
+  // Validate Deepgram voice model
+  const spinner = ora('Validating Deepgram voice model...').start();
+  const voiceResult = await validateVoiceId(config.api.deepgram.apiKey, answers.voiceId);
 
   if (!voiceResult.valid) {
     spinner.fail(chalk.red(`Voice ID validation failed: ${voiceResult.error}`));

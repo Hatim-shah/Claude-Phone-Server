@@ -1,5 +1,5 @@
 /**
- * ElevenLabs Text-to-Speech Service
+ * Deepgram Text-to-Speech Service (Aura)
  * Generates speech audio files and returns URLs for FreeSWITCH playback
  */
 
@@ -9,12 +9,31 @@ const path = require('path');
 const crypto = require('crypto');
 const logger = require('./logger');
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1';
+const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
+const DEEPGRAM_API_URL = 'https://api.deepgram.com/v1/speak';
 
-// Default voice IDs (can be customized)
-const DEFAULT_VOICE_ID = 'JAgnJveGGUh4qy4kh6dF'; // Morpheus voice
-const MODEL_ID = 'eleven_turbo_v2'; // Fast, low-latency model
+// Default Aura-2 voice model (override with DEEPGRAM_VOICE_ID or per-device voiceId)
+const DEFAULT_VOICE_ID = process.env.DEEPGRAM_VOICE_ID || 'aura-2-orpheus-en';
+
+// Known Deepgram TTS models (Aura + Aura-2)
+const KNOWN_VOICES = [
+  // Aura-1
+  'aura-angus-en', 'aura-arcas-en', 'aura-asteria-en', 'aura-athena-en',
+  'aura-helios-en', 'aura-hera-en', 'aura-luna-en', 'aura-orion-en',
+  'aura-orpheus-en', 'aura-perseus-en', 'aura-stella-en', 'aura-zeus-en',
+  // Aura-2 English
+  'aura-2-amalthea-en', 'aura-2-andromeda-en', 'aura-2-apollo-en', 'aura-2-arcas-en',
+  'aura-2-aries-en', 'aura-2-asteria-en', 'aura-2-athena-en', 'aura-2-atlas-en',
+  'aura-2-aurora-en', 'aura-2-callista-en', 'aura-2-cordelia-en', 'aura-2-cora-en',
+  'aura-2-delia-en', 'aura-2-draco-en', 'aura-2-electra-en', 'aura-2-harmonia-en',
+  'aura-2-helena-en', 'aura-2-hera-en', 'aura-2-hermes-en', 'aura-2-hyperion-en',
+  'aura-2-iris-en', 'aura-2-janus-en', 'aura-2-juno-en', 'aura-2-jupiter-en',
+  'aura-2-luna-en', 'aura-2-mars-en', 'aura-2-minerva-en', 'aura-2-neptune-en',
+  'aura-2-odysseus-en', 'aura-2-ophelia-en', 'aura-2-orion-en', 'aura-2-orpheus-en',
+  'aura-2-pandora-en', 'aura-2-phoebe-en', 'aura-2-pluto-en', 'aura-2-saturn-en',
+  'aura-2-selene-en', 'aura-2-thalia-en', 'aura-2-theia-en', 'aura-2-vesta-en',
+  'aura-2-zeus-en'
+];
 
 // Audio output directory (set via setAudioDir)
 let audioDir = path.join(__dirname, '../audio-temp');
@@ -46,44 +65,38 @@ function generateFilename(text) {
 }
 
 /**
- * Convert text to speech using ElevenLabs API
+ * Convert text to speech using Deepgram Aura TTS
  * @param {string} text - Text to convert to speech
- * @param {string} voiceId - ElevenLabs voice ID (optional)
+ * @param {string} voiceId - Deepgram model name (e.g. aura-2-orpheus-en)
  * @returns {Promise<string>} HTTP URL to audio file
  */
 async function generateSpeech(text, voiceId = DEFAULT_VOICE_ID) {
   const startTime = Date.now();
+  const model = voiceId || DEFAULT_VOICE_ID;
 
   try {
-    if (!ELEVENLABS_API_KEY) {
-      throw new Error('ELEVENLABS_API_KEY environment variable not set');
+    if (!DEEPGRAM_API_KEY) {
+      throw new Error('DEEPGRAM_API_KEY environment variable not set');
     }
 
-    logger.info('Generating speech with ElevenLabs', {
+    logger.info('Generating speech with Deepgram', {
       textLength: text.length,
-      voiceId,
-      model: MODEL_ID
+      model
     });
 
-    // Call ElevenLabs API
+    // Call Deepgram Speak API
     const response = await axios({
       method: 'POST',
-      url: `${ELEVENLABS_API_URL}/text-to-speech/${voiceId}`,
+      url: DEEPGRAM_API_URL,
+      params: {
+        model,
+        encoding: 'mp3'
+      },
       headers: {
-        'Accept': 'audio/mpeg',
-        'Content-Type': 'application/json',
-        'xi-api-key': ELEVENLABS_API_KEY
+        'Authorization': `Token ${DEEPGRAM_API_KEY}`,
+        'Content-Type': 'application/json'
       },
-      data: {
-        text,
-        model_id: MODEL_ID,
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          style: 0.0,
-          use_speaker_boost: true
-        }
-      },
+      data: { text },
       responseType: 'arraybuffer'
     });
 
@@ -123,11 +136,11 @@ async function generateSpeech(text, voiceId = DEFAULT_VOICE_ID) {
 
     // Handle specific errors
     if (error.response?.status === 401) {
-      throw new Error('ElevenLabs API authentication failed - check API key');
+      throw new Error('Deepgram API authentication failed - check API key');
     } else if (error.response?.status === 429) {
-      throw new Error('ElevenLabs API rate limit exceeded');
+      throw new Error('Deepgram API rate limit exceeded');
     } else if (error.response?.status === 400) {
-      throw new Error('Invalid request to ElevenLabs API');
+      throw new Error('Invalid request to Deepgram API');
     }
 
     throw new Error(`TTS generation failed: ${error.message}`);
@@ -169,29 +182,14 @@ function cleanupOldFiles(maxAgeMs = 60 * 60 * 1000) {
 }
 
 /**
- * Get list of available ElevenLabs voices
+ * Get list of available Deepgram TTS voices
  * @returns {Promise<Array>} Array of voice objects
  */
 async function getAvailableVoices() {
-  try {
-    if (!ELEVENLABS_API_KEY) {
-      throw new Error('ELEVENLABS_API_KEY environment variable not set');
-    }
-
-    const response = await axios({
-      method: 'GET',
-      url: `${ELEVENLABS_API_URL}/voices`,
-      headers: {
-        'xi-api-key': ELEVENLABS_API_KEY
-      }
-    });
-
-    return response.data.voices;
-
-  } catch (error) {
-    logger.error('Failed to fetch available voices', { error: error.message });
-    throw error;
-  }
+  return KNOWN_VOICES.map(model => ({
+    voice_id: model,
+    name: model
+  }));
 }
 
 // Initialize audio directory
@@ -206,5 +204,6 @@ module.exports = {
   generateSpeech,
   setAudioDir,
   cleanupOldFiles,
-  getAvailableVoices
+  getAvailableVoices,
+  KNOWN_VOICES
 };

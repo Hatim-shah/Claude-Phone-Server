@@ -9,7 +9,7 @@
  * - extension: SIP extension number (e.g., "9002")
  * - authId: 3CX authentication ID for SIP REGISTER
  * - password: 3CX authentication password
- * - voiceId: ElevenLabs voice ID for TTS
+ * - voiceId: Deepgram voice model for TTS (e.g. aura-2-orpheus-en)
  * - prompt: System prompt that defines device personality
  */
 

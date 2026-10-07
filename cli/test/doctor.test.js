@@ -21,14 +21,8 @@ describe('Doctor command', () => {
     assert.ok(claudeCheck.version);
   });
 
-  it('should check ElevenLabs API connectivity', async () => {
-    // Mock test for ElevenLabs API check
-    const apiCheck = { connected: true };
-    assert.strictEqual(apiCheck.connected, true);
-  });
-
-  it('should check OpenAI API connectivity', async () => {
-    // Mock test for OpenAI API check
+  it('should check Deepgram API connectivity', async () => {
+    // Mock test for Deepgram API check
     const apiCheck = { connected: true };
     assert.strictEqual(apiCheck.connected, true);
   });

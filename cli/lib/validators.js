@@ -1,11 +1,29 @@
 import axios from 'axios';
 
+// Known Deepgram TTS models (Aura + Aura-2 English)
+const DEEPGRAM_VOICES = new Set([
+  'aura-angus-en', 'aura-arcas-en', 'aura-asteria-en', 'aura-athena-en',
+  'aura-helios-en', 'aura-hera-en', 'aura-luna-en', 'aura-orion-en',
+  'aura-orpheus-en', 'aura-perseus-en', 'aura-stella-en', 'aura-zeus-en',
+  'aura-2-amalthea-en', 'aura-2-andromeda-en', 'aura-2-apollo-en', 'aura-2-arcas-en',
+  'aura-2-aries-en', 'aura-2-asteria-en', 'aura-2-athena-en', 'aura-2-atlas-en',
+  'aura-2-aurora-en', 'aura-2-callista-en', 'aura-2-cordelia-en', 'aura-2-cora-en',
+  'aura-2-delia-en', 'aura-2-draco-en', 'aura-2-electra-en', 'aura-2-harmonia-en',
+  'aura-2-helena-en', 'aura-2-hera-en', 'aura-2-hermes-en', 'aura-2-hyperion-en',
+  'aura-2-iris-en', 'aura-2-janus-en', 'aura-2-juno-en', 'aura-2-jupiter-en',
+  'aura-2-luna-en', 'aura-2-mars-en', 'aura-2-minerva-en', 'aura-2-neptune-en',
+  'aura-2-odysseus-en', 'aura-2-ophelia-en', 'aura-2-orion-en', 'aura-2-orpheus-en',
+  'aura-2-pandora-en', 'aura-2-phoebe-en', 'aura-2-pluto-en', 'aura-2-saturn-en',
+  'aura-2-selene-en', 'aura-2-thalia-en', 'aura-2-theia-en', 'aura-2-vesta-en',
+  'aura-2-zeus-en'
+]);
+
 /**
- * Validate ElevenLabs API key by making a test request
- * @param {string} apiKey - ElevenLabs API key
+ * Validate Deepgram API key by making a test request
+ * @param {string} apiKey - Deepgram API key
  * @returns {Promise<{valid: boolean, error?: string}>} Validation result
  */
-export async function validateElevenLabsKey(apiKey) {
+export async function validateDeepgramKey(apiKey) {
   if (!apiKey || apiKey.trim() === '') {
     return {
       valid: false,
@@ -14,66 +32,9 @@ export async function validateElevenLabsKey(apiKey) {
   }
 
   try {
-    const response = await axios.get('https://api.elevenlabs.io/v1/voices', {
+    const response = await axios.get('https://api.deepgram.com/v1/projects', {
       headers: {
-        'xi-api-key': apiKey
-      },
-      timeout: 10000
-    });
-
-    if (response.status === 200) {
-      return { valid: true };
-    }
-
-    return {
-      valid: false,
-      error: `Unexpected status: ${response.status}`
-    };
-  } catch (error) {
-    if (error.response) {
-      if (error.response.status === 401) {
-        return {
-          valid: false,
-          error: 'Invalid API key (401 Unauthorized)'
-        };
-      }
-      return {
-        valid: false,
-        error: `API error: ${error.response.status} ${error.response.statusText}`
-      };
-    }
-
-    if (error.code === 'ECONNABORTED') {
-      return {
-        valid: false,
-        error: 'Request timeout - check your internet connection'
-      };
-    }
-
-    return {
-      valid: false,
-      error: `Network error: ${error.message}`
-    };
-  }
-}
-
-/**
- * Validate OpenAI API key by making a test request
- * @param {string} apiKey - OpenAI API key
- * @returns {Promise<{valid: boolean, error?: string}>} Validation result
- */
-export async function validateOpenAIKey(apiKey) {
-  if (!apiKey || apiKey.trim() === '') {
-    return {
-      valid: false,
-      error: 'API key cannot be empty'
-    };
-  }
-
-  try {
-    const response = await axios.get('https://api.openai.com/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Token ${apiKey}`
       },
       timeout: 10000
     });
@@ -152,9 +113,9 @@ export function validateHostname(hostname) {
 }
 
 /**
- * Validate ElevenLabs voice ID
- * @param {string} apiKey - ElevenLabs API key
- * @param {string} voiceId - Voice ID to validate
+ * Validate Deepgram TTS voice/model ID
+ * @param {string} apiKey - Deepgram API key (unused; kept for call-site compatibility)
+ * @param {string} voiceId - Deepgram model name (e.g. aura-2-orpheus-en)
  * @returns {Promise<{valid: boolean, name?: string, error?: string}>} Validation result
  */
 export async function validateVoiceId(apiKey, voiceId) {
@@ -165,55 +126,18 @@ export async function validateVoiceId(apiKey, voiceId) {
     };
   }
 
-  try {
-    const response = await axios.get(`https://api.elevenlabs.io/v1/voices/${voiceId}`, {
-      headers: {
-        'xi-api-key': apiKey
-      },
-      timeout: 10000
-    });
+  const model = voiceId.trim();
 
-    if (response.status === 200 && response.data.name) {
-      return {
-        valid: true,
-        name: response.data.name
-      };
-    }
-
+  // Accept known models, or Aura-style names (allows newer models without a code update)
+  if (DEEPGRAM_VOICES.has(model) || /^aura(-2)?-[a-z]+-[a-z]{2}$/i.test(model)) {
     return {
-      valid: false,
-      error: `Unexpected response: ${response.status}`
-    };
-  } catch (error) {
-    if (error.response) {
-      if (error.response.status === 404) {
-        return {
-          valid: false,
-          error: 'Voice ID not found'
-        };
-      }
-      if (error.response.status === 401) {
-        return {
-          valid: false,
-          error: 'Invalid API key (cannot validate voice ID)'
-        };
-      }
-      return {
-        valid: false,
-        error: `API error: ${error.response.status} ${error.response.statusText}`
-      };
-    }
-
-    if (error.code === 'ECONNABORTED') {
-      return {
-        valid: false,
-        error: 'Request timeout - check your internet connection'
-      };
-    }
-
-    return {
-      valid: false,
-      error: `Network error: ${error.message}`
+      valid: true,
+      name: model
     };
   }
+
+  return {
+    valid: false,
+    error: 'Unknown Deepgram voice model (expected e.g. aura-2-orpheus-en)'
+  };
 }

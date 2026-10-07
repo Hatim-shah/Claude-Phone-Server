@@ -15,8 +15,8 @@ Claude Phone gives your Claude Code installation a phone number through 3CX PBX 
 | Language | Node.js (ES modules for CLI, CommonJS for voice-app) |
 | SIP Server | drachtio-srf |
 | Media Server | FreeSWITCH (via drachtio-fsmrf) |
-| STT | OpenAI Whisper API |
-| TTS | ElevenLabs API |
+| STT | Deepgram Nova API |
+| TTS | Deepgram Aura API |
 | AI Backend | Claude Code CLI (via HTTP wrapper) |
 | PBX | 3CX (any SIP-compatible works) |
 | Container | Docker Compose |
@@ -132,8 +132,8 @@ claude-phone/
 │   │   ├── query-routes.js   # Query API endpoints
 │   │   ├── registrar.js      # Single SIP registration
 │   │   ├── sip-handler.js    # Inbound call handling
-│   │   ├── tts-service.js    # ElevenLabs TTS
-│   │   └── whisper-client.js # OpenAI Whisper STT
+│   │   ├── tts-service.js    # Deepgram TTS
+│   │   └── whisper-client.js # Deepgram STT
 │   ├── DEPLOYMENT.md         # Production deployment guide
 │   ├── README-OUTBOUND.md    # Outbound calling API docs
 │   └── API-QUERY-CONTRACT.md # Query API specification
@@ -231,8 +231,8 @@ See `.env.example` for all variables. Key ones:
 |----------|---------|
 | `EXTERNAL_IP` | Server LAN IP for RTP routing |
 | `CLAUDE_API_URL` | URL to claude-api-server |
-| `ELEVENLABS_API_KEY` | TTS API key |
-| `OPENAI_API_KEY` | Whisper STT API key |
+| `DEEPGRAM_API_KEY` | STT + TTS API key |
+| `DEEPGRAM_STT_MODEL` | STT model (default: nova-3) |
 | `SIP_DOMAIN` | 3CX server FQDN |
 | `SIP_REGISTRAR` | SIP registrar address |
 

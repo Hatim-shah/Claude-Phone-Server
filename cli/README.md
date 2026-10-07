@@ -34,10 +34,9 @@ Select this when setting up a Raspberry Pi or dedicated voice box that connects 
 **What it asks for:**
 1. 3CX SIP domain and registrar
 2. API server IP and port (where claude-api-server runs)
-3. ElevenLabs API key and default voice ID
-4. OpenAI API key (for Whisper STT)
-5. Device configuration (name, extension, auth, voice, prompt)
-6. Server LAN IP (for RTP audio routing)
+3. Deepgram API key and default voice model (STT + TTS)
+4. Device configuration (name, extension, auth, voice, prompt)
+5. Server LAN IP (for RTP audio routing)
 
 **What `claude-phone start` does:**
 - Starts Docker containers (drachtio, freeswitch, voice-app)
@@ -60,11 +59,10 @@ Select this when setting up the Claude API wrapper on a machine with Claude Code
 Select this for a single machine running everything.
 
 **What it asks for:**
-1. ElevenLabs API key and default voice ID
-2. OpenAI API key
-3. 3CX SIP domain and registrar
-4. Device configuration
-5. Server LAN IP, API port, and HTTP port
+1. Deepgram API key and default voice model (STT + TTS)
+2. 3CX SIP domain and registrar
+3. Device configuration
+4. Server LAN IP, API port, and HTTP port
 
 **What `claude-phone start` does:**
 - Starts Docker containers (drachtio, freeswitch, voice-app)
@@ -151,8 +149,7 @@ All configuration is stored in `~/.claude-phone/`:
   "version": "1.0.0",
   "installationType": "both",
   "api": {
-    "elevenlabs": { "apiKey": "...", "defaultVoiceId": "...", "validated": true },
-    "openai": { "apiKey": "...", "validated": true }
+    "deepgram": { "apiKey": "...", "defaultVoiceId": "aura-2-orpheus-en", "validated": true }
   },
   "sip": {
     "domain": "your-3cx.3cx.us",
@@ -169,7 +166,7 @@ All configuration is stored in `~/.claude-phone/`:
     "extension": "9000",
     "authId": "9000",
     "password": "***",
-    "voiceId": "elevenlabs-voice-id",
+    "voiceId": "aura-2-orpheus-en",
     "prompt": "You are Morpheus..."
   }],
   "deployment": {

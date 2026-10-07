@@ -1,31 +1,20 @@
 /**
- * OpenAI Whisper API Client for Speech-to-Text
- * Converts audio buffers (L16 PCM from FreeSWITCH) to text
+ * Deepgram Speech-to-Text Client
+ * Converts audio buffers (L16 PCM from FreeSWITCH) to text via Deepgram Listen API
  */
 
-const OpenAI = require("openai");
-const WaveFile = require("wavefile").WaveFile;
-const fs = require("fs");
-const path = require("path");
+const axios = require('axios');
+const WaveFile = require('wavefile').WaveFile;
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
-// Lazy-initialized OpenAI client
-let openai = null;
-
-function getOpenAIClient() {
-  if (!openai) {
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn("[WHISPER] OPENAI_API_KEY not set - STT will not work");
-      return null;
-    }
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
-  }
-  return openai;
-}
+const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
+const DEEPGRAM_STT_MODEL = process.env.DEEPGRAM_STT_MODEL || 'nova-3';
+const DEEPGRAM_LISTEN_URL = 'https://api.deepgram.com/v1/listen';
 
 /**
- * Convert L16 PCM buffer to WAV format for Whisper API
+ * Convert L16 PCM buffer to WAV format for Deepgram API
  * @param {Buffer} pcmBuffer - Raw L16 PCM audio data
  * @param {number} sampleRate - Sample rate (default: 8000 Hz for telephony)
  * @returns {Buffer} WAV file buffer
@@ -37,13 +26,13 @@ function pcmToWav(pcmBuffer, sampleRate = 8000) {
   const samples = new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, pcmBuffer.length / 2);
 
   // Create WAV from raw PCM data
-  wav.fromScratch(1, sampleRate, "16", samples);
+  wav.fromScratch(1, sampleRate, '16', samples);
 
   return Buffer.from(wav.toBuffer());
 }
 
 /**
- * Transcribe audio using OpenAI Whisper API
+ * Transcribe audio using Deepgram Listen API
  * @param {Buffer} audioBuffer - Audio data (either WAV or raw PCM)
  * @param {Object} options - Transcription options
  * @param {string} options.format - Input format: "wav" or "pcm" (default: "pcm")
@@ -53,42 +42,65 @@ function pcmToWav(pcmBuffer, sampleRate = 8000) {
  */
 async function transcribe(audioBuffer, options = {}) {
   const {
-    format = "pcm",
+    format = 'pcm',
     sampleRate = 8000,
-    language = "en"
+    language = 'en'
   } = options;
 
-  const client = getOpenAIClient();
-  if (!client) {
-    throw new Error("OpenAI API key not configured");
+  if (!DEEPGRAM_API_KEY) {
+    throw new Error('Deepgram API key not configured (DEEPGRAM_API_KEY)');
   }
 
   // Convert PCM to WAV if needed
   let wavBuffer;
-  if (format === "pcm") {
+  if (format === 'pcm') {
     wavBuffer = pcmToWav(audioBuffer, sampleRate);
   } else {
     wavBuffer = audioBuffer;
   }
 
-  // Write to temp file (Whisper API requires a file)
-  const tempFile = path.join("/tmp", "whisper-" + Date.now() + ".wav");
+  // Write to temp file for debugging / cleanup parity with previous Whisper flow
+  const tempFile = path.join(os.tmpdir(), 'deepgram-stt-' + Date.now() + '.wav');
   fs.writeFileSync(tempFile, wavBuffer);
 
   try {
-    const transcription = await client.audio.transcriptions.create({
-      file: fs.createReadStream(tempFile),
-      model: "whisper-1",
-      language: language,
-      response_format: "text"
+    const response = await axios({
+      method: 'POST',
+      url: DEEPGRAM_LISTEN_URL,
+      params: {
+        model: DEEPGRAM_STT_MODEL,
+        language,
+        smart_format: true,
+        punctuate: true
+      },
+      headers: {
+        'Authorization': `Token ${DEEPGRAM_API_KEY}`,
+        'Content-Type': 'audio/wav'
+      },
+      data: wavBuffer,
+      responseType: 'json',
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity
     });
 
-    const timestamp = new Date().toISOString();
-    console.log("[" + timestamp + "] WHISPER Transcribed: " + transcription.substring(0, 100) + (transcription.length > 100 ? "..." : ""));
+    const transcript =
+      response.data?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
 
-    return transcription;
+    const timestamp = new Date().toISOString();
+    const preview = transcript.substring(0, 100) + (transcript.length > 100 ? '...' : '');
+    console.log('[' + timestamp + '] DEEPGRAM STT Transcribed: ' + preview);
+
+    return transcript;
+  } catch (error) {
+    const status = error.response?.status;
+    if (status === 401) {
+      throw new Error('Deepgram API authentication failed - check API key');
+    }
+    if (status === 429) {
+      throw new Error('Deepgram API rate limit exceeded');
+    }
+    throw new Error(`Deepgram STT failed: ${error.message}`);
   } finally {
-    // Clean up temp file
     try {
       fs.unlinkSync(tempFile);
     } catch (e) {
@@ -98,11 +110,11 @@ async function transcribe(audioBuffer, options = {}) {
 }
 
 /**
- * Check if Whisper API is configured and available
+ * Check if Deepgram STT is configured and available
  * @returns {boolean} True if API key is set
  */
 function isAvailable() {
-  return !!process.env.OPENAI_API_KEY;
+  return !!DEEPGRAM_API_KEY;
 }
 
 module.exports = {

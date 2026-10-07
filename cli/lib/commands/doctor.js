@@ -5,7 +5,7 @@ import axios from 'axios';
 import { loadConfig, configExists, getInstallationType } from '../config.js';
 import { checkDocker, getContainerStatus } from '../docker.js';
 import { isServerRunning, getServerPid } from '../process-manager.js';
-import { validateElevenLabsKey, validateOpenAIKey } from '../validators.js';
+import { validateDeepgramKey } from '../validators.js';
 import { isReachable, checkClaudeApiServer as checkClaudeApiHealth } from '../network.js';
 import { checkPort } from '../port-check.js';
 
@@ -54,31 +54,13 @@ async function checkClaudeCLI() {
 }
 
 /**
- * Check ElevenLabs API connectivity
- * @param {string} apiKey - ElevenLabs API key
+ * Check Deepgram API connectivity
+ * @param {string} apiKey - Deepgram API key
  * @returns {Promise<{connected: boolean, error?: string}>}
  */
-async function checkElevenLabsAPI(apiKey) {
+async function checkDeepgramAPI(apiKey) {
   try {
-    const result = await validateElevenLabsKey(apiKey);
-    if (result.valid) {
-      return { connected: true };
-    } else {
-      return { connected: false, error: result.error };
-    }
-  } catch (error) {
-    return { connected: false, error: error.message };
-  }
-}
-
-/**
- * Check OpenAI API connectivity
- * @param {string} apiKey - OpenAI API key
- * @returns {Promise<{connected: boolean, error?: string}>}
- */
-async function checkOpenAIAPI(apiKey) {
-  try {
-    const result = await validateOpenAIKey(apiKey);
+    const result = await validateDeepgramKey(apiKey);
     if (result.valid) {
       return { connected: true };
     } else {
@@ -283,32 +265,18 @@ async function runVoiceServerChecks(config, isPiSplit) {
   }
   checks.push({ name: 'Docker', passed: dockerResult.installed && dockerResult.running });
 
-  // Check ElevenLabs API (only if configured)
-  if (config.api && config.api.elevenlabs && config.api.elevenlabs.apiKey) {
-    const elevenLabsSpinner = ora('Checking ElevenLabs API...').start();
-    const elevenLabsResult = await checkElevenLabsAPI(config.api.elevenlabs.apiKey);
-    if (elevenLabsResult.connected) {
-      elevenLabsSpinner.succeed(chalk.green('ElevenLabs API connected'));
+  // Check Deepgram API (only if configured)
+  if (config.api && config.api.deepgram && config.api.deepgram.apiKey) {
+    const deepgramSpinner = ora('Checking Deepgram API...').start();
+    const deepgramResult = await checkDeepgramAPI(config.api.deepgram.apiKey);
+    if (deepgramResult.connected) {
+      deepgramSpinner.succeed(chalk.green('Deepgram API connected'));
       passedCount++;
     } else {
-      elevenLabsSpinner.fail(chalk.red(`ElevenLabs API failed: ${elevenLabsResult.error}`));
+      deepgramSpinner.fail(chalk.red(`Deepgram API failed: ${deepgramResult.error}`));
       console.log(chalk.gray('  → Check your API key in ~/.claude-phone/config.json\n'));
     }
-    checks.push({ name: 'ElevenLabs API', passed: elevenLabsResult.connected });
-  }
-
-  // Check OpenAI API (only if configured)
-  if (config.api && config.api.openai && config.api.openai.apiKey) {
-    const openAISpinner = ora('Checking OpenAI API...').start();
-    const openAIResult = await checkOpenAIAPI(config.api.openai.apiKey);
-    if (openAIResult.connected) {
-      openAISpinner.succeed(chalk.green('OpenAI API connected'));
-      passedCount++;
-    } else {
-      openAISpinner.fail(chalk.red(`OpenAI API failed: ${openAIResult.error}`));
-      console.log(chalk.gray('  → Check your API key in ~/.claude-phone/config.json\n'));
-    }
-    checks.push({ name: 'OpenAI API', passed: openAIResult.connected });
+    checks.push({ name: 'Deepgram API', passed: deepgramResult.connected });
   }
 
   // Check Voice-app container

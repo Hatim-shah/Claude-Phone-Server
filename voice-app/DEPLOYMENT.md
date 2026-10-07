@@ -94,8 +94,8 @@ Key environment variables in the generated `.env`:
 |----------|---------|
 | `EXTERNAL_IP` | Server LAN IP for RTP routing |
 | `CLAUDE_API_URL` | URL to claude-api-server |
-| `ELEVENLABS_API_KEY` | TTS API key |
-| `OPENAI_API_KEY` | Whisper STT API key |
+| `DEEPGRAM_API_KEY` | STT + TTS API key |
+| `DEEPGRAM_STT_MODEL` | STT model (default: nova-3) |
 | `SIP_DOMAIN` | 3CX server FQDN |
 | `SIP_REGISTRAR` | SIP registrar address |
 

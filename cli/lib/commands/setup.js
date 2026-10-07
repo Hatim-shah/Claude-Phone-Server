@@ -11,8 +11,7 @@ import {
   configExists
 } from '../config.js';
 import {
-  validateElevenLabsKey,
-  validateOpenAIKey,
+  validateDeepgramKey,
   validateVoiceId,
   validateExtension,
   validateIP,
@@ -457,7 +456,7 @@ async function setupPi(config) {
   if (config.deployment && config.deployment.mode === 'standard') {
     console.log(chalk.yellow('\n⚠️  Detected existing standard configuration'));
     console.log(chalk.gray('Your config will be migrated to Pi split-mode while preserving:'));
-    console.log(chalk.gray('  • API keys (ElevenLabs, OpenAI)'));
+    console.log(chalk.gray('  • API keys (Deepgram)'));
     console.log(chalk.gray('  • Device configurations'));
     console.log(chalk.gray('  • SIP settings\n'));
 
@@ -669,8 +668,7 @@ function createDefaultConfig() {
   return {
     version: '1.0.0',
     api: {
-      elevenlabs: { apiKey: '', defaultVoiceId: '', validated: false },
-      openai: { apiKey: '', validated: false }
+      deepgram: { apiKey: '', defaultVoiceId: '', validated: false }
     },
     sip: {
       domain: '',
@@ -700,13 +698,27 @@ function createDefaultConfig() {
  * @returns {Promise<object>} Updated config
  */
 async function setupAPIKeys(config) {
-  // ElevenLabs API Key
-  const elevenLabsAnswers = await inquirer.prompt([
+  // Ensure deepgram config exists (migrates away from legacy elevenlabs/openai keys)
+  if (!config.api) config.api = {};
+  if (!config.api.deepgram) {
+    config.api.deepgram = { apiKey: '', defaultVoiceId: '', validated: false };
+  }
+  if (config.api.elevenlabs) {
+    delete config.api.elevenlabs;
+  }
+  if (config.api.openai) {
+    delete config.api.openai;
+  }
+
+  console.log(chalk.gray('  Deepgram is used for both speech-to-text and text-to-speech.\n'));
+
+  // Deepgram API Key (single key for STT + TTS)
+  const deepgramAnswers = await inquirer.prompt([
     {
       type: 'password',
       name: 'apiKey',
-      message: 'ElevenLabs API key:',
-      default: config.api.elevenlabs.apiKey,
+      message: 'Deepgram API key (STT + TTS):',
+      default: config.api.deepgram.apiKey,
       validate: (input) => {
         if (!input || input.trim() === '') {
           return 'API key is required';
@@ -716,12 +728,12 @@ async function setupAPIKeys(config) {
     }
   ]);
 
-  const elevenLabsKey = elevenLabsAnswers.apiKey;
-  const spinner = ora('Validating ElevenLabs API key...').start();
+  const deepgramKey = deepgramAnswers.apiKey;
+  const spinner = ora('Validating Deepgram API key...').start();
 
-  const elevenLabsResult = await validateElevenLabsKey(elevenLabsKey);
-  if (!elevenLabsResult.valid) {
-    spinner.fail(`Invalid ElevenLabs API key: ${elevenLabsResult.error}`);
+  const deepgramResult = await validateDeepgramKey(deepgramKey);
+  if (!deepgramResult.valid) {
+    spinner.fail(`Invalid Deepgram API key: ${deepgramResult.error}`);
     console.log(chalk.yellow('\n⚠️  You can continue setup, but the key may not work.'));
     const { continueAnyway } = await inquirer.prompt([
       {
@@ -736,10 +748,10 @@ async function setupAPIKeys(config) {
       throw new Error('Setup cancelled due to invalid API key');
     }
 
-    config.api.elevenlabs = { apiKey: elevenLabsKey, defaultVoiceId: '', validated: false };
+    config.api.deepgram = { apiKey: deepgramKey, defaultVoiceId: '', validated: false };
   } else {
-    spinner.succeed('ElevenLabs API key validated');
-    config.api.elevenlabs = { apiKey: elevenLabsKey, defaultVoiceId: '', validated: true };
+    spinner.succeed('Deepgram API key validated');
+    config.api.deepgram = { apiKey: deepgramKey, defaultVoiceId: '', validated: true };
   }
 
   // Ask for default voice ID immediately after API key
@@ -747,11 +759,11 @@ async function setupAPIKeys(config) {
     {
       type: 'input',
       name: 'voiceId',
-      message: 'ElevenLabs default voice ID (for all devices):',
-      default: config.api.elevenlabs.defaultVoiceId || '',
+      message: 'Deepgram voice model (for all devices, e.g. aura-2-orpheus-en):',
+      default: config.api.deepgram.defaultVoiceId || 'aura-2-orpheus-en',
       validate: (input) => {
         if (!input || input.trim() === '') {
-          return 'Voice ID is required';
+          return 'Voice model is required';
         }
         return true;
       }
@@ -759,12 +771,12 @@ async function setupAPIKeys(config) {
   ]);
 
   const defaultVoiceId = voiceIdAnswers.voiceId;
-  const voiceSpinner = ora('Validating ElevenLabs voice ID...').start();
+  const voiceSpinner = ora('Validating Deepgram voice model...').start();
 
-  const voiceValidation = await validateVoiceId(elevenLabsKey, defaultVoiceId);
+  const voiceValidation = await validateVoiceId(deepgramKey, defaultVoiceId);
   if (!voiceValidation.valid) {
-    voiceSpinner.fail(`Voice ID validation failed: ${voiceValidation.error}`);
-    console.log(chalk.yellow('\n⚠️  You can continue setup, but the voice ID may not work.'));
+    voiceSpinner.fail(`Voice model validation failed: ${voiceValidation.error}`);
+    console.log(chalk.yellow('\n⚠️  You can continue setup, but the voice model may not work.'));
     const { continueAnyway } = await inquirer.prompt([
       {
         type: 'confirm',
@@ -775,55 +787,13 @@ async function setupAPIKeys(config) {
     ]);
 
     if (!continueAnyway) {
-      throw new Error('Setup cancelled due to invalid voice ID');
+      throw new Error('Setup cancelled due to invalid voice model');
     }
 
-    config.api.elevenlabs.defaultVoiceId = defaultVoiceId;
+    config.api.deepgram.defaultVoiceId = defaultVoiceId;
   } else {
-    voiceSpinner.succeed(`Voice ID validated: ${voiceValidation.name}`);
-    config.api.elevenlabs.defaultVoiceId = defaultVoiceId;
-  }
-
-  // OpenAI API Key
-  const openAIAnswers = await inquirer.prompt([
-    {
-      type: 'password',
-      name: 'apiKey',
-      message: 'OpenAI API key (for Whisper STT):',
-      default: config.api.openai.apiKey,
-      validate: (input) => {
-        if (!input || input.trim() === '') {
-          return 'API key is required';
-        }
-        return true;
-      }
-    }
-  ]);
-
-  const openAIKey = openAIAnswers.apiKey;
-  const openAISpinner = ora('Validating OpenAI API key...').start();
-
-  const openAIResult = await validateOpenAIKey(openAIKey);
-  if (!openAIResult.valid) {
-    openAISpinner.fail(`Invalid OpenAI API key: ${openAIResult.error}`);
-    console.log(chalk.yellow('\n⚠️  You can continue setup, but the key may not work.'));
-    const { continueAnyway } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'continueAnyway',
-        message: 'Continue anyway?',
-        default: false
-      }
-    ]);
-
-    if (!continueAnyway) {
-      throw new Error('Setup cancelled due to invalid API key');
-    }
-
-    config.api.openai = { apiKey: openAIKey, validated: false };
-  } else {
-    openAISpinner.succeed('OpenAI API key validated');
-    config.api.openai = { apiKey: openAIKey, validated: true };
+    voiceSpinner.succeed(`Voice model validated: ${voiceValidation.name}`);
+    config.api.deepgram.defaultVoiceId = defaultVoiceId;
   }
 
   return config;
@@ -971,11 +941,11 @@ async function setupDevice(config) {
     {
       type: 'input',
       name: 'voiceId',
-      message: 'ElevenLabs voice ID:',
-      default: existingDevice?.voiceId || config.api.elevenlabs.defaultVoiceId || '',
+      message: 'Deepgram voice model (e.g. aura-2-orpheus-en):',
+      default: existingDevice?.voiceId || config.api.deepgram.defaultVoiceId || 'aura-2-orpheus-en',
       validate: (input) => {
         if (!input || input.trim() === '') {
-          return 'Voice ID is required';
+          return 'Voice model is required';
         }
         return true;
       }
@@ -994,9 +964,9 @@ async function setupDevice(config) {
     }
   ]);
 
-  // Validate voice ID with ElevenLabs API
-  const voiceSpinner = ora('Validating ElevenLabs voice ID...').start();
-  const voiceValidation = await validateVoiceId(config.api.elevenlabs.apiKey, answers.voiceId);
+  // Validate voice model with Deepgram naming rules
+  const voiceSpinner = ora('Validating Deepgram voice model...').start();
+  const voiceValidation = await validateVoiceId(config.api.deepgram.apiKey, answers.voiceId);
 
   if (!voiceValidation.valid) {
     voiceSpinner.fail(`Voice ID validation failed: ${voiceValidation.error}`);
